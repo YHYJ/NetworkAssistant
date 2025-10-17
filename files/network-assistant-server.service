@@ -1,0 +1,13 @@
+[Unit]
+Description=Network Assistant Client
+After=network-online.target
+Wants=network-online.target
+
+[Service]
+WorkingDirectory=/opt/NetworkAssistant
+ExecStart=/usr/local/bin/python3.11 server.py
+Restart=on-failure
+RestartSec=5s
+
+[Install]
+WantedBy=multi-user.target

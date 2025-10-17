@@ -1,0 +1,29 @@
+[app]
+name = 'Network Assistant' # 程序名
+version = 'v0.0.1'         # 程序版本
+
+[client]
+name = 'TODO'        # 客户端名
+interface = 'wlp1s0' # 网络接口名
+
+[mqtt]
+host = '127.0.0.1'
+port = 1883
+username = ''
+password = ''
+client_id = ''                # 该 MQTT 客户端的 ID（留空则自动生成）
+topic = '/FROM/Gateway/Info'  # 通过该 Topic 进行传递消息
+topic_will = 'status/offline' # 客户端断开连接时代理将向该 Topic 发送断线通知
+qos = 1                       # 0/1/2
+keepalive = 60                # 心跳间隔
+retain = false                # 是否保留最后一条消息
+wait = 5                      # 连接异常断开后尝试重连的等待时间
+clean_session = true          # 是否清除会话
+
+[logger]
+to_console = true
+console_level = 'INFO'
+to_file = true
+file_level = ['INFO', 'WARNING', 'ERROR']
+backup_count = 30
+format = '%(asctime)s | %(levelname)-8s | <%(threadName)s> %(module)s.%(funcName)s [%(lineno)d]: %(message)s'
