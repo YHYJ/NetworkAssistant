@@ -5,7 +5,7 @@ Wants=network-online.target
 
 [Service]
 WorkingDirectory=/opt/NetworkAssistant
-ExecStart=/usr/local/bin/python3.11 server.py
+ExecStart=/usr/local/bin/network-assistant-server
 Restart=on-failure
 RestartSec=5s
 
