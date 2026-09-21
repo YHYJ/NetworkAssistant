@@ -1,6 +1,6 @@
 [app]
 name = 'Network Assistant' # 程序名
-version = 'v0.0.2'         # 程序版本
+version = 'v0.0.3'         # 程序版本
 
 [client]
 name = 'TODO'        # 客户端名
