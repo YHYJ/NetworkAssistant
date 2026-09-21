@@ -47,8 +47,8 @@ class Transmitter:
         self.retain = config.get('retain', False)
         self.tls_ca_certs = config.get('tls_ca_certs', None)
         # 等待下限 1 秒，避免忙循环
-        self.wait = max(as_int(config.get('wait', 5), 5,
-                               'mqtt.wait', logger), 1)
+        self.wait = max(as_int(config.get('wait', 5), 5, 'mqtt.wait', logger),
+                        1)
         self.clean_session = config.get('clean_session', True)
 
         # Topic
@@ -125,10 +125,14 @@ class Transmitter:
         :reason_code: 断开原因
         """
         try:
+            # 同一次断开可能被回调两次：disconnect() 写包时同步一次，网络循环线程处理关闭时再一次
+            # 只在"从已连接变为断开"时记一条
+            was_connected = self._connected
             self._connected = False
             self._connected_event.clear()
             if reason_code == 0:
-                self.logger.info("已正常断开与 MQTT 服务器的连接")
+                if was_connected:
+                    self.logger.info("已正常断开与 MQTT 服务器的连接")
             else:
                 self.logger.warning(
                     "与 MQTT 服务器连接断开，reason_code = {}，将自动重连".format(
