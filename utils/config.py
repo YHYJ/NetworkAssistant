@@ -17,6 +17,26 @@ import os
 import toml
 
 
+def section(config: dict, name: str, logger=None) -> dict:
+    """取出配置中的某个段落
+
+    段落写成标量（例如 `client = false`）时按未配置处理，避免调用方拿到
+    非字典后直接抛异常。
+
+    :config: 完整配置
+    :name: 段落名
+    :logger: 日志记录器，提供时会记录一条告警
+    """
+    value = config.get(name, {})
+    if isinstance(value, dict):
+        return value
+
+    if logger is not None:
+        logger.warning('[{}] 配置应为字典，实际为 {!r}，按未配置处理'.format(
+            name, value))
+    return {}
+
+
 def scheduler(confile: str):
     """结构化配置文件调度器
     目前支持 toml 和 json 格式

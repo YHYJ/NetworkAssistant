@@ -15,7 +15,7 @@ import threading
 import paho.mqtt.client as mqtt
 from paho.mqtt.enums import CallbackAPIVersion
 
-from utils.other import turntable
+from utils.other import as_int, turntable
 
 
 class Transmitter:
@@ -33,15 +33,22 @@ class Transmitter:
 
         # 连接信息
         self.host = config.get('host', '127.0.0.1')
-        self.port = config.get('port', 1883)
+        self.port = as_int(config.get('port', 1883), 1883, 'mqtt.port', logger)
         self.username = config.get('username', None)
         self.password = config.get('password', None)
         self.client_id = config.get('client_id', None)
-        self.qos = config.get('qos', 1)
-        self.keepalive = config.get('keepalive', 60)
+        self.qos = as_int(config.get('qos', 1), 1, 'mqtt.qos', logger)
+        if self.qos not in (0, 1, 2):
+            logger.warning('mqtt.qos 应为 0/1/2，实际为 {!r}，按 1 处理'.format(
+                self.qos))
+            self.qos = 1
+        self.keepalive = as_int(config.get('keepalive', 60), 60,
+                                'mqtt.keepalive', logger)
         self.retain = config.get('retain', False)
         self.tls_ca_certs = config.get('tls_ca_certs', None)
-        self.wait = max(config.get('wait', 5), 1)  # 等待下限，避免忙循环
+        # 等待下限 1 秒，避免忙循环
+        self.wait = max(as_int(config.get('wait', 5), 5,
+                               'mqtt.wait', logger), 1)
         self.clean_session = config.get('clean_session', True)
 
         # Topic
@@ -98,22 +105,20 @@ class Transmitter:
             if reason_code == 0:
                 self._connected = True
                 self._connected_event.set()
-                self.logger.info("已连接 MQTT，客户端 ID = {}".format(
-                    self.client_id))
+                self.logger.info("已连接 MQTT，客户端 ID = {}".format(self.client_id))
                 # clean_session 为 True 时，重连后需要恢复订阅
                 self._resubscribe()
             else:
                 self._connected = False
                 self._connected_event.clear()
-                self.logger.error("连接 MQTT 失败，reason_code = {}".format(
-                    reason_code))
+                self.logger.error(
+                    "连接 MQTT 失败，reason_code = {}".format(reason_code))
         except Exception as e:
             # 连上了却恢复订阅失败 = 收不到消息：断开连接，交由监督线程重连后重试
             self.logger.exception('连接回调异常，断开连接等待重连: {}'.format(e))
             self._disconnect_quietly()
 
-    def _on_disconnect(self, client, userdata, flags, reason_code,
-                       properties):
+    def _on_disconnect(self, client, userdata, flags, reason_code, properties):
         """断开连接回调函数 —— 只记录状态，重连由 loop_forever 负责
         运行在网络循环线程中，异常不能逃逸出去，否则网络循环会退出
 
@@ -238,8 +243,7 @@ class Transmitter:
             self._run_loop_forever()  # 阻塞，直到断开或异常退出
             if self._stopping.is_set():
                 return
-            self.logger.error("MQTT 网络循环已退出，{} 秒后重连".format(
-                self.wait))
+            self.logger.error("MQTT 网络循环已退出，{} 秒后重连".format(self.wait))
             if self._stopping.wait(self.wait):  # 等待期间收到停机信号
                 return
             try:
@@ -280,8 +284,7 @@ class Transmitter:
         result, _ = self.client.subscribe(topic, self.qos)
         if result == mqtt.MQTT_ERR_NO_CONN:
             # 尚未连接：连接建立后由 _resubscribe 订阅，属于正常时序
-            self.logger.info("尚未连接 MQTT，'{}' 将在连接建立后订阅".format(
-                topic))
+            self.logger.info("尚未连接 MQTT，'{}' 将在连接建立后订阅".format(topic))
         elif result != mqtt.MQTT_ERR_SUCCESS:
             self.logger.warning("订阅 '{}' 失败: {}".format(
                 topic, mqtt.error_string(result)))
@@ -304,8 +307,8 @@ class Transmitter:
         if self._loop_thread and self._loop_thread.is_alive():
             self._loop_thread.join(timeout=self.wait + 1)
             if self._loop_thread.is_alive():
-                self.logger.warning("MQTT 网络循环线程未能在 {} 秒内退出".format(
-                    self.wait + 1))
+                self.logger.warning("MQTT 网络循环线程未能在 {} 秒内退出".format(self.wait +
+                                                                    1))
 
         if self._connected:
             self.logger.info('已关闭和 MQTT 服务器的连接')
@@ -320,8 +323,7 @@ class Transmitter:
         """
         # 一次性客户端（client.py）不会等连接建立，这里替它等
         if not self._connected_event.wait(self.wait):
-            self.logger.error("未能在 {} 秒内连上 MQTT，本次消息未发布".format(
-                self.wait))
+            self.logger.error("未能在 {} 秒内连上 MQTT，本次消息未发布".format(self.wait))
             return False
 
         payload = json.dumps(data)
@@ -334,13 +336,14 @@ class Transmitter:
         if result.rc != mqtt.MQTT_ERR_SUCCESS:
             # 未连接但 QoS > 0：消息会进入 paho 的发送队列，连接恢复后自动补发
             if result.rc == mqtt.MQTT_ERR_NO_CONN and self.qos > 0:
-                self.logger.warning("连接已断开，消息已排队等待补发: {}".format(
-                    self.topic))
+                self.logger.warning("连接已断开，消息已排队等待补发: {}".format(self.topic))
             else:
                 self.logger.error("发布消息到 '{}' 失败: {}".format(
                     self.topic, mqtt.error_string(result.rc)))
                 return False
 
+        # QoS 0 时 paho 在写包时就触发本回调，语义是"已提交"；
+        # QoS >= 1 才是代理确认（实测两者停机后都能送达）
         if self._published_event.wait(self.wait):
             return True
 

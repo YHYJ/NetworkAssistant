@@ -18,7 +18,7 @@ import sys
 from logwrapper import get_logger
 
 from transmitter.mqtt import Transmitter
-from utils.config import scheduler
+from utils.config import scheduler, section
 
 
 def get_ip_address(interface, logger):
@@ -45,17 +45,21 @@ def main(config: dict):
 
     :config: 配置项
     """
-    app_conf = config.get('app', {})
-    name = app_conf.get('name', 'Network Assistant')
-    version = app_conf.get('version', 'v0.0.0')
-    client_conf = config.get('client', {})
-    name = client_conf.get('name', 'TODO')
-    interface = client_conf.get('interface', 'wlan0')
-    mqtt_conf = config.get('mqtt', {})
-    logger_conf = config.get('logger', {})
-
-    # 初始化日志记录器
+    # 初始化日志记录器（此时还没有 logger，日志配置写错时只按未配置处理）
+    logger_conf = section(config, 'logger')
     logger = get_logger(logfolder='logs', config=logger_conf)
+
+    app_conf = section(config, 'app', logger)
+    client_conf = section(config, 'client', logger)
+    mqtt_conf = section(config, 'mqtt', logger)
+
+    name = client_conf.get('name', 'TODO')
+    version = app_conf.get('version', 'v0.0.0')
+    interface = client_conf.get('interface', 'wlan0')
+    if not isinstance(interface, str) or not interface:
+        logger.warning('client.interface 应为非空字符串，实际为 {!r}，按默认值 '
+                       'wlan0 处理'.format(interface))
+        interface = 'wlan0'
 
     # 启动
     logger.info('Start {} Client {}'.format(name, version))

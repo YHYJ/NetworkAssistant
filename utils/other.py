@@ -26,6 +26,22 @@ def turntable(length=16):
     return prize
 
 
+def as_int(value, default, name, logger):
+    """把配置项当整数读取，类型不对时告警并使用默认值
+
+    :value: 配置值
+    :default: 默认值
+    :name: 配置项名（用于日志）
+    :logger: 日志记录器
+    """
+    try:
+        return int(value)
+    except (TypeError, ValueError):
+        logger.warning('{} 应为整数，实际为 {!r}，按默认值 {} 处理'.format(
+            name, value, default))
+        return default
+
+
 def dice(min=0, max=100):
     """生成一个指定范围内的随机整数
 

@@ -15,7 +15,7 @@ import queue
 from logwrapper import get_logger
 
 from transmitter.mqtt import Transmitter
-from utils.config import scheduler
+from utils.config import scheduler, section
 
 
 def main(config: dict):
@@ -23,14 +23,15 @@ def main(config: dict):
 
     :config: 配置项
     """
-    app_conf = config.get('app', {})
+    # 初始化日志记录器（此时还没有 logger，日志配置写错时只按未配置处理）
+    logger_conf = section(config, 'logger')
+    logger = get_logger(logfolder='logs', config=logger_conf)
+
+    app_conf = section(config, 'app', logger)
+    mqtt_conf = section(config, 'mqtt', logger)
+
     name = app_conf.get('name', 'Network Assistant')
     version = app_conf.get('version', 'v0.0.0')
-    mqtt_conf = config.get('mqtt', {})
-    logger_conf = config.get('logger', {})
-
-    # 初始化日志记录器
-    logger = get_logger(logfolder='logs', config=logger_conf)
 
     # 启动
     logger.info('Start {} Server {}'.format(name, version))
