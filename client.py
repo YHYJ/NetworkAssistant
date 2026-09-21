@@ -13,7 +13,7 @@ from datetime import datetime
 import os
 import queue
 import socket
-import time
+import sys
 
 from logwrapper import get_logger
 
@@ -75,9 +75,12 @@ def main(config: dict):
 
     transfer = queue.Queue()
     transmitter = Transmitter(mqtt_conf, transfer, logger)
-    transmitter.sender(payload)
-    time.sleep(0.1)
+    published = transmitter.sender(payload)
     transmitter.stop()
+
+    # 上报未被代理确认时以非 0 退出，便于 systemd 与定时器记录本次失败
+    if not published:
+        sys.exit(1)
 
 
 if __name__ == "__main__":
